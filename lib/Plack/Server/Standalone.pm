@@ -134,15 +134,19 @@ sub handle_connection {
                 read  => sub {
                     my(undef, $length, $offset) = @_;
                     my $read;
-                    if ($buf) {
-                        $_[0] = $buf;
-                        $length -= length $buf;
-                        $offset += length $buf;
-                        $read = length $buf;
-                        $buf  = undef;
+                    if (my $buflen = length $buf) {
+                        $read = $length < $buflen ? $length : $buflen;
+                        $_[0] = substr $buf, 0, $read;
+                        $buf = substr $buf, $read;
+                        $length -= $read;
+                        $offset += $read;
                     }
                     return $read if $length <= 0;
-                    $read += $self->read_timeout($conn, \$_[0], $length, $offset, $self->{timeout}) || 0;
+                    if ($length > 0) {
+                        my $rlen = $self->read_timeout($conn, \$_[0], $length, $offset, $self->{timeout});
+                        $read += $rlen
+                            if $rlen;
+                    }
                     return $read;
                 },
                 close => sub { };
