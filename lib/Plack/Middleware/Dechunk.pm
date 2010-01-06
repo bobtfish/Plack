@@ -3,7 +3,7 @@ use strict;
 no warnings;
 use parent qw(Plack::Middleware);
 
-use constant CHUNK_SIZE => 1024;# * 32;
+use constant CHUNK_SIZE => 1024 * 32;
 
 sub call {
     my($self, $env) = @_;
@@ -26,14 +26,19 @@ sub dechunk_input {
     while (1) {
         my $read = $env->{'psgi.input'}->read($chunk_buffer, CHUNK_SIZE, length $chunk_buffer);
 
-        while ( $chunk_buffer =~ s/^([0-9a-fA-F]+).*\015\012// ) {
-            my $chunk_len = hex $1;
+        while ( $chunk_buffer =~ /^(([0-9a-fA-F]+).*\015\012)/ ) {
+            my $header_len = length $1;
+            my $chunk_len  = hex $2;
             last DECHUNK if $chunk_len == 0;
 
-            $body .= substr $chunk_buffer, 0, $chunk_len, '';
-            $chunk_buffer =~ s/^\015\012//;
-
-            $length += $chunk_len;
+            if (length $chunk_buffer > $chunk_len + $header_len) {
+                $chunk_buffer =~ s/^[0-9a-fA-F]+.*\015\012//;
+                $body .= substr $chunk_buffer, 0, $chunk_len, '';
+                $chunk_buffer =~ s/^\015\012//;
+                $length += $chunk_len;
+            } else {
+                last; # more data needed
+            }
         }
 
         last unless $read && $read > 0;
