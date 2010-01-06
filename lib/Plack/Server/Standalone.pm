@@ -129,16 +129,24 @@ sub handle_connection {
                 }
             }
             $buf = substr $buf, $reqlen;
-            if ($env->{CONTENT_LENGTH}) {
-                # TODO can $conn seek to the begining of body and then set to 'psgi.input'?
-                while (length $buf < $env->{CONTENT_LENGTH}) {
-                    $self->read_timeout($conn, \$buf, $env->{CONTENT_LENGTH} - length($buf), length($buf), $self->{timeout})
-                        or return;
-                }
-            }
 
-            open my $input, "<", \$buf;
-            $env->{'psgi.input'} = $input;
+            $env->{'psgi.input'} = Plack::Util::inline_object
+                read  => sub {
+                    my(undef, $length, $offset) = @_;
+                    my $read;
+                    if ($buf) {
+                        $_[0] = $buf;
+                        $length -= length $buf;
+                        $offset += length $buf;
+                        $read = length $buf;
+                        $buf  = undef;
+                    }
+                    return $read if $length <= 0;
+                    $read += $self->read_timeout($conn, \$_[0], $length, $offset, $self->{timeout}) || 0;
+                    return $read;
+                },
+                close => sub { };
+
             $res = Plack::Util::run_app $app, $env;
             last;
         }
