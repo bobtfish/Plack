@@ -141,11 +141,9 @@ sub handle_connection {
                         $length -= $read;
                         $offset += $read;
                     }
-                    return $read if $length <= 0;
                     if ($length > 0) {
                         my $rlen = $self->read_timeout($conn, \$_[0], $length, $offset, $self->{timeout});
-                        $read += $rlen
-                            if $rlen;
+                        $read += $rlen if $rlen;
                     }
                     return $read;
                 },
